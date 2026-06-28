@@ -44,7 +44,9 @@ const login = async(req,res)=>{
             httpOnly: true,
             sameSite: "strict"
         });
-        res.status(200).json({});
+        const userData = user.toJSON();
+        delete userData.password;
+        res.status(200).json(userData);
     }catch(err){
         return res.status(500).json({message:"Login Failed"})
     }
