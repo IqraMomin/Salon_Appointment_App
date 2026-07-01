@@ -3,7 +3,7 @@ const Service = require("./Service");
 const StaffProfile = require("./StaffProfile");
 const StaffAvailability = require("./StaffAvailability");
 const StaffService = require("./StaffService");
-const Appointment = require("./Appointment");
+const Appointment =require("./Appointment");
 
 /* User ↔ StaffProfile */
 

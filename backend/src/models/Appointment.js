@@ -34,6 +34,20 @@ const Appointment = sequelize.define(
             ),
             defaultValue: "BOOKED"
         },
+        paymentStatus: {
+            type: DataTypes.ENUM(
+                "PENDING",
+                "PAID",
+                "FAILED",
+                "REFUNDED"
+            ),
+            defaultValue: "PENDING"
+        },
+        
+        reminderSent: {
+            type: DataTypes.BOOLEAN,
+            defaultValue: false
+        },
 
         notes: {
             type: DataTypes.TEXT

@@ -1,8 +1,12 @@
-const Appointment = require("../models/Appointment");
-const Service = require("../models/Service");
-const StaffAvailability = require("../models/StaffAvailability");
 const { Op } = require("sequelize");
 
+const Appointment = require("../models/Appointment");
+const Service = require("../models/Service");
+const StaffProfile = require("../models/StaffProfile");
+const StaffAvailability = require("../models/StaffAvailability");
+const User = require("../models/User");
+
+const generateSlots = require("../utils/slotGenerator");
 
 const getDay = (date) => {
 
@@ -12,33 +16,13 @@ const getDay = (date) => {
 
 };
 
-const timeToMinutes = (time) => {
 
-    const [hours, minutes] = time.split(":").map(Number);
-
-    return hours * 60 + minutes;
-
-};
-
-const minutesToTime = (minutes) => {
-
-    const hours = Math.floor(minutes / 60);
-
-    const mins = minutes % 60;
-
-    return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
-
-};
 
 const getAvailableSlots = async (req, res) => {
 
     try {
 
-        const {
-            staffProfileId,
-            serviceId,
-            date
-        } = req.query;
+        const { staffProfileId, serviceId, date } = req.query;
 
         if (!staffProfileId || !serviceId || !date) {
             return res.status(400).json({
@@ -47,7 +31,6 @@ const getAvailableSlots = async (req, res) => {
             });
         }
 
-        // Get service
         const service = await Service.findByPk(serviceId);
 
         if (!service) {
@@ -57,12 +40,8 @@ const getAvailableSlots = async (req, res) => {
             });
         }
 
-        const duration = service.duration;
-
-        // Determine day of week
         const day = getDay(date);
 
-        // Get staff schedule
         const availability = await StaffAvailability.findOne({
             where: {
                 staffProfileId,
@@ -74,60 +53,27 @@ const getAvailableSlots = async (req, res) => {
         if (!availability) {
             return res.status(404).json({
                 success: false,
-                message: "Staff not available."
+                message: "Staff is not available on this day."
             });
         }
 
-        // Existing bookings
-        const appointments = await Appointment.findAll({
-            where: {
-                staffProfileId,
-                appointmentDate: date,
-                status: {
-                    [Op.not]: "CANCELLED"
-                }
-            }
+        const availableSlots = await generateSlots({
+            appointmentDate: date,
+            duration: service.duration,
+            availability,
+            staffProfileId
         });
 
-        const booked = appointments.map(a => ({
-            start: timeToMinutes(a.startTime),
-            end: timeToMinutes(a.endTime)
-        }));
-
-        const slots = [];
-
-        let current = timeToMinutes(availability.startTime);
-        const closing = timeToMinutes(availability.endTime);
-
-        while (current + duration <= closing) {
-
-            const end = current + duration;
-
-            const overlap = booked.some(slot =>
-                current < slot.end &&
-                end > slot.start
-            );
-
-            if (!overlap) {
-                slots.push({
-                    startTime: minutesToTime(current),
-                    endTime: minutesToTime(end)
-                });
-            }
-
-            current += duration;
-        }
-
-        res.status(200).json({
+        return res.status(200).json({
             success: true,
-            availableSlots: slots
+            availableSlots
         });
 
     } catch (error) {
 
         console.log(error);
 
-        res.status(500).json({
+        return res.status(500).json({
             success: false,
             message: error.message
         });
@@ -143,86 +89,64 @@ const bookAppointment = async (req, res) => {
         const customerId = req.user.id;
 
         const {
-
             staffProfileId,
-
             serviceId,
-
             appointmentDate,
-
             startTime,
-
             notes
-
         } = req.body;
 
-        // Check service
         const service = await Service.findByPk(serviceId);
 
         if (!service) {
-
             return res.status(404).json({
-
                 success: false,
-
                 message: "Service not found."
-
             });
-
         }
 
-        // Check staff
         const staff = await StaffProfile.findByPk(staffProfileId);
 
         if (!staff) {
-
             return res.status(404).json({
-
                 success: false,
-
                 message: "Staff not found."
-
             });
-
         }
 
-        // Calculate End Time
-        const duration = service.duration;
+        const day = getDay(appointmentDate);
 
-        const startMinutes = timeToMinutes(startTime);
-
-        const endMinutes = startMinutes + duration;
-
-        const endTime = minutesToTime(endMinutes);
-
-        // Check overlapping appointments
-        const existingAppointments = await Appointment.findAll({
+        const availability = await StaffAvailability.findOne({
             where: {
                 staffProfileId,
-                appointmentDate,
-                status: {
-                    [Op.notIn]: ["CANCELLED"]
-                }
+                dayOfWeek: day,
+                isAvailable: true
             }
         });
 
-        for (const appointment of existingAppointments) {
+        if (!availability) {
+            return res.status(400).json({
+                success: false,
+                message: "Staff is not available on this day."
+            });
+        }
 
-            const bookedStart = timeToMinutes(appointment.startTime);
-        
-            const bookedEnd = timeToMinutes(appointment.endTime);
-        
-            const overlap =
-                startMinutes < bookedEnd &&
-                endMinutes > bookedStart;
-        
-            if (overlap) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Selected slot is already booked."
-                });
-            }
-        
+        const availableSlots = await generateSlots({
+            appointmentDate,
+            duration: service.duration,
+            availability,
+            staffProfileId
+        });
+
+        const selectedSlot = availableSlots.find(
+            slot => slot.startTime === startTime
+        );
+
+        if (!selectedSlot) {
+            return res.status(400).json({
+                success: false,
+                message: "Selected slot is no longer available."
+            });
         }
 
         const appointment = await Appointment.create({
@@ -235,15 +159,15 @@ const bookAppointment = async (req, res) => {
 
             appointmentDate,
 
-            startTime,
+            startTime: selectedSlot.startTime,
 
-            endTime,
+            endTime: selectedSlot.endTime,
 
             notes
 
         });
 
-        res.status(201).json({
+        return res.status(201).json({
 
             success: true,
 
@@ -259,7 +183,7 @@ const bookAppointment = async (req, res) => {
 
         console.log(error);
 
-        res.status(500).json({
+        return res.status(500).json({
 
             success: false,
 
@@ -269,9 +193,210 @@ const bookAppointment = async (req, res) => {
 
     }
 
-}
+};
+
+
+const getMyAppointments = async (req, res) => {
+
+    try {
+
+        const appointments = await Appointment.findAll({
+
+            where: {
+                customerId: req.user.id
+            },
+
+            include: [
+
+                {
+                    model: Service,
+                    attributes: [
+                        "id",
+                        "serviceName",
+                        "price",
+                        "duration"
+                    ]
+                },
+
+                {
+                    model: StaffProfile,
+
+                    include: [
+
+                        {
+                            model: User,
+
+                            attributes: [
+                                "id",
+                                "name",
+                                "email",
+                                "phone"
+                            ]
+                        }
+
+                    ]
+
+                }
+
+            ],
+
+            order: [
+                ["appointmentDate", "DESC"],
+                ["startTime", "ASC"]
+            ]
+
+        });
+
+        return res.status(200).json({
+
+            success: true,
+
+            count: appointments.length,
+
+            appointments
+
+        });
+
+    } catch (error) {
+
+        console.log(error);
+
+        return res.status(500).json({
+
+            success: false,
+
+            message: error.message
+
+        });
+
+    }
+
+};
+
+
+const getAppointmentById = async (req, res) => {
+
+    try {
+
+        const appointment = await Appointment.findByPk(
+            req.params.id,
+            {
+                include: [
+
+                    {
+                        model: Service
+                    },
+
+                    {
+                        model: User,
+                        attributes: [
+                            "id",
+                            "name",
+                            "email",
+                            "phone"
+                        ]
+                    },
+
+                    {
+                        model: StaffProfile,
+
+                        include: [
+
+                            {
+                                model: User,
+                                attributes: [
+                                    "id",
+                                    "name",
+                                    "email",
+                                    "phone"
+                                ]
+                            }
+
+                        ]
+
+                    }
+
+                ]
+            }
+        );
+
+        if (!appointment) {
+
+            return res.status(404).json({
+                success: false,
+                message: "Appointment not found."
+            });
+
+        }
+
+        // CUSTOMER can only access their own appointment
+
+        if (
+            req.user.role === "CUSTOMER" &&
+            appointment.customerId !== req.user.id
+        ) {
+
+            return res.status(403).json({
+                success: false,
+                message: "Access denied."
+            });
+
+        }
+
+        // STAFF can only access appointments assigned to them
+
+        if (req.user.role === "STAFF") {
+
+            const staffProfile = await StaffProfile.findOne({
+                where: {
+                    userId: req.user.id
+                }
+            });
+
+            if (
+                !staffProfile ||
+                appointment.staffProfileId !== staffProfile.id
+            ) {
+
+                return res.status(403).json({
+                    success: false,
+                    message: "Access denied."
+                });
+
+            }
+
+        }
+
+        return res.status(200).json({
+
+            success: true,
+
+            appointment
+
+        });
+
+    }
+
+    catch (error) {
+
+        console.log(error);
+
+        return res.status(500).json({
+
+            success: false,
+
+            message: error.message
+
+        });
+
+    }
+
+};
 
 module.exports = {
     getAvailableSlots,
-    bookAppointment
+    bookAppointment,
+    getMyAppointments,
+    getAppointmentById
+    
 }

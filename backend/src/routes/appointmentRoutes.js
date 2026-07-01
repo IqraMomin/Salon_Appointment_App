@@ -5,7 +5,7 @@ const router = express.Router();
 const authentication = require("../middleware/authentication");
 
 const {
-    getAvailableSlots,bookAppointment
+    getAvailableSlots,bookAppointment,getMyAppointments,getAppointmentById
 } = require("../controllers/appointmentController");
 
 
@@ -14,6 +14,18 @@ router.post(
     "/",
     authentication,
     bookAppointment
+);
+
+router.get(
+    "/my",
+    authentication,
+    getMyAppointments
+);
+
+router.get(
+    "/:id",
+    authentication,
+    getAppointmentById
 );
 
 module.exports = router;
