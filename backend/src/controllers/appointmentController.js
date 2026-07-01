@@ -136,8 +136,142 @@ const getAvailableSlots = async (req, res) => {
 
 };
 
+const bookAppointment = async (req, res) => {
 
+    try {
+
+        const customerId = req.user.id;
+
+        const {
+
+            staffProfileId,
+
+            serviceId,
+
+            appointmentDate,
+
+            startTime,
+
+            notes
+
+        } = req.body;
+
+        // Check service
+        const service = await Service.findByPk(serviceId);
+
+        if (!service) {
+
+            return res.status(404).json({
+
+                success: false,
+
+                message: "Service not found."
+
+            });
+
+        }
+
+        // Check staff
+        const staff = await StaffProfile.findByPk(staffProfileId);
+
+        if (!staff) {
+
+            return res.status(404).json({
+
+                success: false,
+
+                message: "Staff not found."
+
+            });
+
+        }
+
+        // Calculate End Time
+        const duration = service.duration;
+
+        const startMinutes = timeToMinutes(startTime);
+
+        const endMinutes = startMinutes + duration;
+
+        const endTime = minutesToTime(endMinutes);
+
+        // Check overlapping appointments
+        const existingAppointments = await Appointment.findAll({
+            where: {
+                staffProfileId,
+                appointmentDate,
+                status: {
+                    [Op.notIn]: ["CANCELLED"]
+                }
+            }
+        });
+
+        for (const appointment of existingAppointments) {
+
+            const bookedStart = timeToMinutes(appointment.startTime);
+        
+            const bookedEnd = timeToMinutes(appointment.endTime);
+        
+            const overlap =
+                startMinutes < bookedEnd &&
+                endMinutes > bookedStart;
+        
+            if (overlap) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Selected slot is already booked."
+                });
+            }
+        
+        }
+
+        const appointment = await Appointment.create({
+
+            customerId,
+
+            staffProfileId,
+
+            serviceId,
+
+            appointmentDate,
+
+            startTime,
+
+            endTime,
+
+            notes
+
+        });
+
+        res.status(201).json({
+
+            success: true,
+
+            message: "Appointment booked successfully.",
+
+            appointment
+
+        });
+
+    }
+
+    catch (error) {
+
+        console.log(error);
+
+        res.status(500).json({
+
+            success: false,
+
+            message: error.message
+
+        });
+
+    }
+
+}
 
 module.exports = {
-    getAvailableSlots
+    getAvailableSlots,
+    bookAppointment
 }
