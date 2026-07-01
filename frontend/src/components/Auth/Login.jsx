@@ -3,6 +3,7 @@ import { Button, Form } from 'react-bootstrap';
 import { useDispatch } from 'react-redux';
 import "./Login.css";
 import { useHistory } from 'react-router-dom/cjs/react-router-dom.min';
+import { login } from '../../redux/slices/auth';
 
 function Login() {
   const [email, setEmail] = useState("");
@@ -15,7 +16,7 @@ function Login() {
     e.preventDefault();
 
     const userData = { email, password};
-    dispatch();
+    dispatch(login(userData));
 
   }
   return (

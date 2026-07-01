@@ -5,6 +5,7 @@ import Login from './components/Auth/Login';
 import Home from './components/Customers/Home';
 import SignUp from "./components/Auth/SignUp"
 import { Container } from 'react-bootstrap';
+import AdminHome from './components/Admin/AdminHome';
 
 
 function App() {
@@ -12,7 +13,7 @@ function App() {
 
   return (
     <Container fluid>
-      <Switch>
+      {/* <Switch>
         <Route path="/login">
         {!isLoggedIn ? <Login/> : <Redirect to="/home"/>}
         </Route>
@@ -20,12 +21,13 @@ function App() {
         {!isLoggedIn ? <SignUp/> : <Redirect to="/home"/>}
         </Route>
         <Route path="/home">
-        {isLoggedIn ? <Home/> : <Login/>}
+        {isLoggedIn ? <AdminHome/> : <Login/>}
         </Route>
         <Route path="/" exact>
         {!isLoggedIn ? <Login/> : <Redirect to="/home"/>}
         </Route>
-      </Switch>
+      </Switch> */}
+      <AdminHome/>
       </Container>
   )
 }

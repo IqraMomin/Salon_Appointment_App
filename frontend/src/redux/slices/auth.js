@@ -28,6 +28,18 @@ const authSlice = createSlice({
             state.loading = false;
             state.message = action.payload;
         })
+        .addCase(login.pending,(state,action)=>{
+            state.loading = true;
+        })
+        .addCase(login.fulfilled,(state,action)=>{
+            state.loading = false;
+            state.user = action.payload;
+            state.isLoggedIn = true;
+        })
+        .addCase(login.rejected,(state,action)=>{
+            state.loading = false;
+            state.error = action.payload;
+        })
     }
 })
 
@@ -47,6 +59,7 @@ export const login = createAsyncThunk("auth/login",async(userData,{rejectWithVal
             withCredentials:true
         });
         console.log(response.data);
+        return response.data;
     }catch(err){
         return rejectWithValue(err);
     }
