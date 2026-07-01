@@ -5,6 +5,7 @@ const cookieParser = require("cookie-parser");
 const authRoutes = require("./routes/authRoutes");
 const serviceRoutes = require("./routes/serviceRoutes");
 const staffRoutes=require("./routes/staffRoutes");
+const appointmentRoutes = require("./routes/appointmentRoutes");
 
 const app = express();
 
@@ -20,6 +21,7 @@ app.use(cors({
 app.use("/api/auth", authRoutes);
 app.use("/api/services", serviceRoutes);
 app.use("/api/staff",staffRoutes);
+app.use("/api/appointments", appointmentRoutes);
 
 
 app.get("/", (req, res) => {
